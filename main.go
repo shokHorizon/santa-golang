@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"sync"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -51,10 +52,23 @@ func main() {
 			owner = update.Message.From.ID
 			msg = tgbotapi.NewMessage(update.Message.Chat.ID, "Owner добавлен")
 			userIds[owner] = 0
+			userNames[owner] = update.Message.From.UserName
 		case "/make":
 			if owner == update.Message.From.ID {
 				fillMap(userIds)
 				msg = tgbotapi.NewMessage(update.Message.Chat.ID, fmt.Sprint(userIds))
+
+				errGroup := sync.WaitGroup{}
+				for k, v := range userIds {
+					errGroup.Add(1)
+					go func() {
+						if _, err := bot.Send(tgbotapi.NewMessage(k, fmt.Sprintf("Вы дарите подарок: @%s\nЕго история: %s", userNames[v], userWishes[v]))); err != nil {
+							panic(err)
+						}
+						defer errGroup.Done()
+					}()
+					errGroup.Wait()
+				}
 			}
 		case "/random":
 			if owner == update.Message.From.ID {
@@ -63,17 +77,17 @@ func main() {
 				userIds[newUser] = 0
 			}
 		case "/list":
-			msg = tgbotapi.NewMessage(update.Message.Chat.ID, fmt.Sprint(userIds))
+			msg = tgbotapi.NewMessage(update.Message.Chat.ID, fmt.Sprint(userNames))
 		default:
 			if id, ok := userIds[update.Message.From.ID]; !ok {
-				msg = tgbotapi.NewMessage(update.Message.Chat.ID, "Вы добавлены в список участников, напишите одним сообщением свой вишлист")
+				msg = tgbotapi.NewMessage(update.Message.Chat.ID, "Вы добавлены в список участников, напишите одним сообщением свою историю")
 				userIds[update.Message.From.ID] = 0
 				userNames[update.Message.From.ID] = update.Message.From.UserName
 			} else if id == 0 {
-				msg = tgbotapi.NewMessage(update.Message.Chat.ID, fmt.Sprintf("Ваш новый вишлист\n%s\n\nВы можете изменить вишлист в любой момент, просто снова напишите сообщение", update.Message.Text))
+				msg = tgbotapi.NewMessage(update.Message.Chat.ID, fmt.Sprintf("Ваша новая история\n%s\n\nВы можете изменить историю в любой момент, просто снова напишите сообщение", update.Message.Text))
 				userWishes[update.Message.From.ID] = update.Message.Text
 			} else {
-				msg = tgbotapi.NewMessage(update.Message.Chat.ID, fmt.Sprintf("Ты даришь подарок: %s\nЕго вишлист: %s", userNames[userIds[update.Message.From.ID]], userWishes[userIds[update.Message.From.ID]]))
+				msg = tgbotapi.NewMessage(update.Message.Chat.ID, fmt.Sprintf("Ты даришь подарок: %s\nЕго история: %s", userNames[userIds[update.Message.From.ID]], userWishes[userIds[update.Message.From.ID]]))
 			}
 
 		}
@@ -95,16 +109,38 @@ func main() {
 }
 
 func fillMap(m map[int64]int64) {
-	var firstElem, prevElem int64
-	for k, _ := range m {
-		if firstElem == 0 {
-			firstElem = k
-		}
-		if prevElem != 0 {
-			m[k] = prevElem
-		}
-		prevElem = k
-	}
+	var correct bool
 
-	m[firstElem] = prevElem
+	for !correct {
+		idsSlice := make([]int64, 0, len(m))
+
+		for k, _ := range m {
+			idsSlice = append(idsSlice, k)
+		}
+		rand.Shuffle(len(idsSlice), func(i, j int) {
+			idsSlice[i], idsSlice[j] = idsSlice[j], idsSlice[i]
+		})
+
+		var firstElem, prevElem int64
+		for i := range len(m) {
+
+			if firstElem == 0 {
+				firstElem = idsSlice[0]
+			}
+			if prevElem != 0 {
+				m[idsSlice[i]] = prevElem
+			}
+
+			prevElem = idsSlice[i]
+		}
+		m[firstElem] = prevElem
+
+		for k, v := range m {
+			if k == v {
+				correct = false
+				break
+			}
+			correct = true
+		}
+	}
 }
