@@ -24,7 +24,7 @@ func main() {
 	bot.Debug = true
 
 	// Create a new UpdateConfig struct with an offset of 0. Offsets are used
-	// to make sure Telegram knows we've handled previous values and we don't
+	// to make sure Telegram knows we've handled previous values, and we don't
 	// need them repeated.
 	updateConfig := tgbotapi.NewUpdate(0)
 
@@ -114,7 +114,7 @@ func fillMap(m map[int64]int64) {
 	for !correct {
 		idsSlice := make([]int64, 0, len(m))
 
-		for k, _ := range m {
+		for k := range m {
 			idsSlice = append(idsSlice, k)
 		}
 		rand.Shuffle(len(idsSlice), func(i, j int) {
